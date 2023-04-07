@@ -30,8 +30,11 @@ function Compress-Media([string]$type, [string]$mode) {
     $params = switch ($type) {
         "*.jpg" { "-compress jpeg -quality 82" }  #quality can be adjusted as needed
         "*.png" { "-depth 24 -define png:compression-filter=2 -define png:compression-level=9 -define png:compression-strategy=1" }
-        #3 things to adjust here: crf-higher means lower quality, lower size; preset-how long it takes, can be changed to "fast" = lower quality, bigger size; b:a - quality of the audio, higher means better
-        "*.avi,*.mp4,*.mkv" { "-y -c:v libx265 -crf 30 -preset slower -c:a libopus -b:a 128k" }
+#### 3 things to adjust here:
+#### crf-higher means lower quality, lower size
+#### preset-how long it takes to convert, can be changed to "fast", "medium", "slower" etc = longer transcoding, better quality, slightly bigger size
+#### b:a - quality of the audio - higher number means higher quality, bigger size
+        "*.avi,*.mp4,*.mkv" { "-y -c:v libx265 -crf 27 -preset superfast -c:a libopus -b:a 128k" }
     }
 
     foreach ($f in $type.Split(",")) {
@@ -42,13 +45,15 @@ function Compress-Media([string]$type, [string]$mode) {
             $InitialSize = Get-Size($file)
 
             switch($mode) {
-                "Image" {iex "$magick '$file' $params '$file'"} # compress image
-                "Video" {$tempfile = "$file.mp4"
-                iex "$FFmpeg -i '$file' $params '$tempfile'" #compress video
-                move $tempfile $file -Force }
+                "Image" {iex "$magick '$file' $params '$file'" # compress image
+                    $EndSize = Get-Size($file)}
+                "Video" {$tempfile = "$file 2.mp4"
+                    iex "$FFmpeg -i '$file' $params '$tempfile'" #compress video
+                    #move $tempfile $file -Force
+                    $EndSize = Get-Size($tempfile)
+                }
             }
             
-            $EndSize = Get-Size($file)
             $Row = New-Object PSObject
             $Row | Add-Member -MemberType NoteProperty -Name Path -Value $file
             $Row | Add-Member -MemberType NoteProperty -Name Time -Value $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
@@ -60,7 +65,6 @@ function Compress-Media([string]$type, [string]$mode) {
             }
         }
 }
-
 
 #checks if Log file is specified. If it is, and the file is missing, it will create it
 if($Outputfile.Length -gt 0) { 
