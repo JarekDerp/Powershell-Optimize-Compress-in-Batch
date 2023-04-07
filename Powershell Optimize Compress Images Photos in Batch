@@ -45,15 +45,13 @@ function Compress-Media([string]$type, [string]$mode) {
             $InitialSize = Get-Size($file)
 
             switch($mode) {
-                "Image" {iex "$magick '$file' $params '$file'" # compress image
-                    $EndSize = Get-Size($file)}
+                "Image" {iex "$magick '$file' $params '$file'" # compress image}
                 "Video" {$tempfile = "$file 2.mp4"
                     iex "$FFmpeg -i '$file' $params '$tempfile'" #compress video
-                    #move $tempfile $file -Force
-                    $EndSize = Get-Size($tempfile)
+                    move $tempfile $file -Force
                 }
             }
-            
+            $EndSize = Get-Size($file)
             $Row = New-Object PSObject
             $Row | Add-Member -MemberType NoteProperty -Name Path -Value $file
             $Row | Add-Member -MemberType NoteProperty -Name Time -Value $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
