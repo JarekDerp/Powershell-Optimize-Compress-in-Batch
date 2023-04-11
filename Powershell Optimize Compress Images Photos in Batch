@@ -2,10 +2,13 @@
 ####    https://imagemagick.org/script/download.php
 ####    https://ffmpeg.org/download.html
 ####
+#### Script is created to optimize videos and photos from mid-range phones. For high quality photos and videos,
+#### I would recommend increasing some of the values. Feel free to experiment with the settings to get the optimal results.
+####
 #### To run this script, you can invoke it like this:
 #### powershell C:\Path\NameOfThisScript.ps1 'C:\Path\A folder with photos/videos' 'C:\Path\LogFile.csv'
 #### It will then process all jpgs and pngs in the "A folder with photos/videos" in C:\Path
-#### The LogFile is optional. If not needed, then you can run
+#### The LogFile is optional. If not needed, but it helps not to process the same files again. To run without it, run command like this
 #### powershell C:\Path\NameOfThisScript.ps1 'C:\Path\A folder with photos/videos'
 ####
 #### The script will pause at the end with a summary table
@@ -32,9 +35,9 @@ function Compress-Media([string]$type, [string]$mode) {
         "*.png" { "-depth 24 -define png:compression-filter=2 -define png:compression-level=9 -define png:compression-strategy=1" }
 #### 3 things to adjust here:
 #### crf-higher means lower quality, lower size
-#### preset-how long it takes to convert, can be changed to "fast", "medium", "slower" etc = longer transcoding, better quality, slightly bigger size
+#### preset-how long it takes to convert, can be changed to "fast", "medium", "slower" etc = longer transcoding, better quality, bigger size
 #### b:a - quality of the audio - higher number means higher quality, bigger size
-        "*.avi,*.mp4,*.mkv" { "-y -c:v libx265 -crf 27 -preset superfast -c:a libopus -b:a 128k" }
+        "*.avi,*.mp4,*.mkv" { "-y -c:v libx265 -crf 22 -preset superfast -fps_mode passthrough -c:a libopus -b:a 128k" }
     }
 
     foreach ($f in $type.Split(",")) {
@@ -45,9 +48,11 @@ function Compress-Media([string]$type, [string]$mode) {
             $InitialSize = Get-Size($file)
 
             switch($mode) {
-                "Image" {iex "$magick '$file' $params '$file'" # compress image}
+                "Image" {iex "$magick '$file' $params '$file'"} # compress image
                 "Video" {$tempfile = "$file 2.mp4"
                     iex "$FFmpeg -i '$file' $params '$tempfile'" #compress video
+                    $correcttimestamp = (gi $file | foreach {@($_.CreationTime, $_.LastAccessTime, $_.LastWriteTime)} | sort )[0]
+                    (gi $tempfile).creationtime = $correcttimestamp
                     move $tempfile $file -Force
                 }
             }
@@ -59,13 +64,14 @@ function Compress-Media([string]$type, [string]$mode) {
             $Row | Add-Member -MemberType NoteProperty -Name SizeAfterMB -Value $EndSize
             $optimizedlist.Add($Row)
             # if log file is specified, it will log the info about optimized images and videos
-            if($Outputfile.Length -gt 0) {$Row | Export-Csv -LiteralPath $Outputfile -NoTypeInformation -Append -Force}
+            if($Outputfile.Length -gt 0) {$Row | Export-Csv -LiteralPath $Outputfile -NoTypeInformation -Append -Force -Encoding UTF8}
             }
         }
 }
 
 #checks if Log file is specified. If it is, and the file is missing, it will create it
-if($Outputfile.Length -gt 0) { 
+$usingLogfile = $Outputfile.Length -gt 0
+if($usingLogfile) { 
     $excludedlist = try {Import-Csv -LiteralPath $Outputfile}
     catch {'"Path","Time","SizeBeforeMB","SizeAfterMB"' | Set-Content $Outputfile}
     }
@@ -80,8 +86,9 @@ $optimizedlist = New-Object collections.arraylist
     Compress-Media "*.avi,*.mp4,*.mkv" "video"
 
 $optimizedlist
-# removes information from log file for items that doen't exists
-if($Outputfile.Length -gt 0) {$excludedlist = Import-Csv -LiteralPath $Outputfile}
-if($Outputfile.Length -gt 0) {$excludedlist | where {$_.Path -iin $ListOfFiles.FullName} | Export-Csv -LiteralPath $Outputfile -NoTypeInformation -Force}
+# removes information from log file for items that doesn't exists
+if($usingLogfile) {$Content = Import-Csv -LiteralPath $Outputfile |
+    where {$_.Path -iin $ListOfFiles.FullName}}
+if($usingLogfile) {$Content | Export-Csv -LiteralPath $Outputfile -NoTypeInformation -Force -Encoding UTF8}
 
 pause
